@@ -414,8 +414,10 @@ def local_defense_report(profile: dict, history: Iterable[dict]) -> str:
 
 
 def get_nvidia_api_key() -> str | None:
+    import streamlit as st
     """Get Nvidia API key from environment variable."""
-    return os.getenv("NVIDIA_API_KEY")
+    #return os.getenv("NVIDIA_API_KEY")
+    return st.secrets["NVIDIA_API_KEY"]
 
 
 def generate_ai_text(system_prompt: str, user_prompt: str) -> str:
@@ -431,7 +433,7 @@ def generate_ai_text(system_prompt: str, user_prompt: str) -> str:
     }
 
     payload = {
-        "model": os.getenv("NVIDIA_MODEL", "qwen/qwen3.5-397b-a17b"),
+        "model": st.secrets.get("NVIDIA_MODEL", "qwen/qwen3.5-397b-a17b"),
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
