@@ -421,6 +421,7 @@ def get_nvidia_api_key() -> str | None:
 
 
 def generate_ai_text(system_prompt: str, user_prompt: str) -> str:
+    import streamlit as st
     """Generate text using Nvidia LLM endpoint."""
     api_key = get_nvidia_api_key()
     if not api_key:
