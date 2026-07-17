@@ -43,6 +43,8 @@ with tab1:
             border-radius: 18px;
             padding: 1.5rem 1.75rem 1.2rem;
             margin-bottom: 1.4rem;
+            width: 100%;
+            box-sizing: border-box;
             color: #fff;
         ">
             <div style="font-size:2.2rem;font-weight:800;letter-spacing:-0.5px;line-height:1.2;">🎓 Thesis Defense Studio</div>
@@ -99,7 +101,7 @@ with tab2:
         """
         <div style="
             background:linear-gradient(135deg,#0EA5E9 0%,#6366F1 100%);
-            border-radius:16px;padding:1.2rem 1.5rem 1rem;margin-bottom:1.2rem;color:#fff;
+            border-radius:16px;padding:1.2rem 1.5rem 1rem;margin-bottom:1.2rem;width:100%;box-sizing:border-box;color:#fff;
         ">
             <div style="font-size:1.65rem;font-weight:800;">📄 Document Review</div>
             <div style="font-size:0.9rem;opacity:0.88;margin-top:0.25rem;">
@@ -182,7 +184,7 @@ with tab3:
         """
         <div style="
             background:linear-gradient(135deg,#DC2626 0%,#9333EA 100%);
-            border-radius:16px;padding:1.2rem 1.5rem 1rem;margin-bottom:1.2rem;color:#fff;
+            border-radius:16px;padding:1.2rem 1.5rem 1rem;margin-bottom:1.2rem;width:100%;box-sizing:border-box;color:#fff;
         ">
             <div style="font-size:1.65rem;font-weight:800;">🗣️ Simulated Thesis Defense</div>
             <div style="font-size:0.9rem;opacity:0.88;margin-top:0.25rem;">
