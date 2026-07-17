@@ -20,3 +20,9 @@ Streamlit prototype with three pages:
    ```
 
 If no API key is set, the prototype falls back to local heuristic responses so the UI still works.
+
+## how to debug the API call ##
+
+Set NVIDIA_DEBUG = true in secrets.toml:3, then run Streamlit.
+Or set environment variable NVIDIA_DEBUG=true before launch.
+Trigger a review/defense call to see the outgoing request print.

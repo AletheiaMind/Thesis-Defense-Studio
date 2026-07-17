@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import requests
 from dataclasses import dataclass
@@ -420,14 +421,31 @@ def get_nvidia_api_key() -> str | None:
     return st.secrets["NVIDIA_API_KEY"]
 
 
+def is_nvidia_debug_enabled() -> bool:
+    import streamlit as st
+
+    def to_bool(value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    return to_bool(st.secrets.get("NVIDIA_DEBUG", False)) or to_bool(os.getenv("NVIDIA_DEBUG"))
+
+
 def generate_ai_text(system_prompt: str, user_prompt: str) -> str:
     import streamlit as st
     """Generate text using Nvidia LLM endpoint."""
+    debug_enabled = is_nvidia_debug_enabled()
     api_key = get_nvidia_api_key()
     if not api_key:
+        print("Nvidia API key is missing.")
         return ""
 
     invoke_url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    stream = False
+
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Accept": "application/json",
@@ -442,17 +460,33 @@ def generate_ai_text(system_prompt: str, user_prompt: str) -> str:
         "max_tokens": 2048,
         "temperature": 0.70,
         "top_p": 0.95,
-        "stream": False,
+        "stream": stream,
     }
+
+    debug_headers = dict(headers)
+    debug_headers["Authorization"] = "Bearer ***REDACTED***"
+    debug_request = {
+        "method": "POST",
+        "url": invoke_url,
+        "headers": debug_headers,
+        "json": payload,
+    }
+    if debug_enabled:
+        print("NVIDIA API outgoing request:\n" + json.dumps(debug_request, indent=2, ensure_ascii=True))
 
     try:
         response = requests.post(invoke_url, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         data = response.json()
         if "choices" in data and len(data["choices"]) > 0:
-            return data["choices"][0]["message"]["content"].strip()
-    except requests.exceptions.RequestException:
-        pass
+            ai_text = data["choices"][0]["message"]["content"].strip()
+            if debug_enabled:
+                print(f"NVIDIA API returned text length: {len(ai_text)}")
+            return ai_text
+        if debug_enabled:
+            print("NVIDIA API response missing choices.")
+    except requests.exceptions.RequestException as exc:
+        print(f"NVIDIA API request failed: {exc}")
 
     return ""
 
