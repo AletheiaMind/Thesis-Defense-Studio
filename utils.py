@@ -452,7 +452,7 @@ def generate_ai_text(system_prompt: str, user_prompt: str) -> str:
     }
 
     payload = {
-        "model": st.secrets.get("NVIDIA_MODEL", "qwen/qwen3.5-397b-a17b"),
+        "model": st.secrets.get("NVIDIA_MODEL", "google/diffusiongemma-26b-a4b-it"),
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
