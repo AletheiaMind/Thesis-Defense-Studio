@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import io
 import json
 import os
@@ -7,6 +8,37 @@ import re
 import requests
 from dataclasses import dataclass
 from typing import Iterable
+
+
+SHARED_STATE_KEYS = ("profile", "paper_text", "paper_summary", "uploaded_document")
+
+
+def _shared_state_file() -> str:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_dir, ".streamlit", "shared_state.json")
+
+
+def _load_shared_state() -> dict:
+    path = _shared_state_file()
+    if not os.path.exists(path):
+        return {}
+
+    try:
+        with open(path, "r", encoding="utf-8") as fp:
+            data = json.load(fp)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def persist_shared_state() -> None:
+    import streamlit as st
+
+    data = {key: st.session_state.get(key) for key in SHARED_STATE_KEYS}
+    path = _shared_state_file()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fp:
+        json.dump(data, fp, ensure_ascii=True, indent=2)
 
 
 def inject_custom_css() -> None:
@@ -282,10 +314,12 @@ class ReviewResult:
 def initialize_state() -> None:
     import streamlit as st
 
+    persisted = _load_shared_state()
     defaults = {
         "profile": {"name": "", "age": 0, "school": ""},
         "paper_text": "",
         "paper_summary": "",
+        "uploaded_document": None,
         "review_result": None,
         "defense_history": [],
         "defense_turn": 0,
@@ -296,13 +330,30 @@ def initialize_state() -> None:
 
     for key, value in defaults.items():
         if key not in st.session_state:
-            st.session_state[key] = value
+            if key in persisted:
+                st.session_state[key] = persisted[key]
+            else:
+                st.session_state[key] = copy.deepcopy(value)
 
 
 def save_profile(name: str, age: int, school: str) -> None:
     import streamlit as st
 
     st.session_state.profile = {"name": name.strip(), "age": age, "school": school.strip()}
+    persist_shared_state()
+
+
+def save_uploaded_document(uploaded_file, paper_text: str, paper_summary: str) -> None:
+    import streamlit as st
+
+    st.session_state.paper_text = paper_text
+    st.session_state.paper_summary = paper_summary
+    st.session_state.uploaded_document = {
+        "name": uploaded_file.name,
+        "type": uploaded_file.type or "unknown",
+        "size_bytes": int(getattr(uploaded_file, "size", 0) or 0),
+    }
+    persist_shared_state()
 
 
 def extract_text_from_upload(uploaded_file) -> str:

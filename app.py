@@ -41,6 +41,11 @@ if st.session_state.profile["name"]:
         f"{st.session_state.profile['school']}"
     )
 
+if st.session_state.uploaded_document:
+    doc = st.session_state.uploaded_document
+    size_kb = (doc.get("size_bytes", 0) or 0) / 1024
+    st.info(f"Current shared document: **{doc.get('name', 'Unknown')}** ({size_kb:.1f} KB)")
+
 col_left, col_right = st.columns([1.1, 0.9])
 
 with col_left:
