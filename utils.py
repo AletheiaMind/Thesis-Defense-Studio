@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 
-SHARED_STATE_KEYS = ("profile", "paper_text", "paper_summary", "uploaded_document")
+SHARED_STATE_KEYS = ("profile", "paper_text", "paper_summary")
 
 
 def _shared_state_file() -> str:
