@@ -41,8 +41,8 @@ if not profile["name"]:
 st.subheader("1 · Upload your document")
 uploaded = st.file_uploader("Supported formats: PDF, DOCX, TXT", type=["pdf", "docx", "txt"])
 
-if st.session_state.uploaded_document:
-    doc = st.session_state.uploaded_document
+if st.session_state.get("uploaded_document"):
+    doc = st.session_state.get("uploaded_document")
     size_kb = (doc.get("size_bytes", 0) or 0) / 1024
     st.caption(f"Current shared document: {doc.get('name', 'Unknown')} ({size_kb:.1f} KB)")
 

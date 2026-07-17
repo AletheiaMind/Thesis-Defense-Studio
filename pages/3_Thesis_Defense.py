@@ -32,8 +32,8 @@ if not profile["name"]:
 
 if not st.session_state.paper_summary:
     st.info("📄 Upload a document on the Document Review page first so questions stay on-topic.")
-elif st.session_state.uploaded_document:
-    doc = st.session_state.uploaded_document
+elif st.session_state.get("uploaded_document"):
+    doc = st.session_state.get("uploaded_document")
     size_kb = (doc.get("size_bytes", 0) or 0) / 1024
     st.caption(f"Using shared document: {doc.get('name', 'Unknown')} ({size_kb:.1f} KB)")
 
