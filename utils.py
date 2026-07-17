@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import requests
 from dataclasses import dataclass
 from typing import Iterable
@@ -333,6 +334,13 @@ def build_review_prompt(profile: dict, paper_text: str) -> str:
         f"{profile.get('name', 'the student')} from {profile.get('school', 'their school')}. "
         "Provide constructive feedback divided into Strengths, Weaknesses, and Actionable Improvement Suggestions. "
         "Be practical, specific, and supportive.\n\n"
+        "Return ONLY valid JSON (no markdown, no extra text) using exactly this schema:\n"
+        "{\n"
+        "  \"strengths\": \"string\",\n"
+        "  \"weaknesses\": \"string\",\n"
+        "  \"suggestions\": \"string\",\n"
+        "  \"summary\": \"string\"\n"
+        "}\n\n"
         f"Student age: {profile.get('age', 'unknown')}\n\n"
         f"Paper text:\n{paper_text}"
     )
@@ -434,10 +442,28 @@ def is_nvidia_debug_enabled() -> bool:
     return to_bool(st.secrets.get("NVIDIA_DEBUG", False)) or to_bool(os.getenv("NVIDIA_DEBUG"))
 
 
+def get_nvidia_api_timeout() -> float:
+    import streamlit as st
+
+    default_timeout = 120.0
+    raw_value = st.secrets.get("NVIDIA_API_TIMEOUT", os.getenv("NVIDIA_API_TIMEOUT"))
+    if raw_value is None:
+        return default_timeout
+
+    try:
+        timeout = float(raw_value)
+        if timeout <= 0:
+            return default_timeout
+        return timeout
+    except (TypeError, ValueError):
+        return default_timeout
+
+
 def generate_ai_text(system_prompt: str, user_prompt: str) -> str:
     import streamlit as st
     """Generate text using Nvidia LLM endpoint."""
     debug_enabled = is_nvidia_debug_enabled()
+    request_timeout = get_nvidia_api_timeout()
     api_key = get_nvidia_api_key()
     if not api_key:
         print("Nvidia API key is missing.")
@@ -470,12 +496,13 @@ def generate_ai_text(system_prompt: str, user_prompt: str) -> str:
         "url": invoke_url,
         "headers": debug_headers,
         "json": payload,
+        "timeout": request_timeout,
     }
     if debug_enabled:
         print("NVIDIA API outgoing request:\n" + json.dumps(debug_request, indent=2, ensure_ascii=True))
 
     try:
-        response = requests.post(invoke_url, headers=headers, json=payload, timeout=30)
+        response = requests.post(invoke_url, headers=headers, json=payload, timeout=request_timeout)
         response.raise_for_status()
         data = response.json()
         if "choices" in data and len(data["choices"]) > 0:
@@ -491,16 +518,105 @@ def generate_ai_text(system_prompt: str, user_prompt: str) -> str:
     return ""
 
 
+def _parse_ai_review_sections(ai_text: str) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    candidate_text = ai_text.strip()
+
+    # Some models still wrap JSON in markdown fences; unwrap before json.loads.
+    fenced_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", candidate_text, flags=re.IGNORECASE)
+    if fenced_match:
+        candidate_text = fenced_match.group(1).strip()
+
+    # Support JSON-shaped model outputs when the model follows strict formatting.
+    try:
+        data = json.loads(candidate_text)
+        if isinstance(data, dict):
+            for key in ("strengths", "weaknesses", "suggestions", "summary"):
+                value = data.get(key)
+                if isinstance(value, str) and value.strip():
+                    parsed[key] = value.strip()
+            if parsed:
+                return parsed
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    lines = ai_text.splitlines()
+    section_aliases = {
+        "strengths": ["strengths", "strength"],
+        "weaknesses": ["weaknesses", "weakness", "limitations", "concerns"],
+        "suggestions": [
+            "actionable improvement suggestions",
+            "improvement suggestions",
+            "suggestions",
+            "recommendations",
+            "improvements",
+        ],
+        "summary": ["condensed summary", "summary", "overall summary", "overall assessment"],
+    }
+
+    current_section: str | None = None
+    buckets: dict[str, list[str]] = {
+        "strengths": [],
+        "weaknesses": [],
+        "suggestions": [],
+        "summary": [],
+    }
+
+    def detect_section(text: str) -> str | None:
+        normalized = text.strip().lower().strip("*#:- ")
+        for section, aliases in section_aliases.items():
+            if normalized in aliases:
+                return section
+        return None
+
+    inline_pattern = re.compile(r"^\s*(?:\*\*|#+\s*)?([A-Za-z\s]+?)(?:\*\*)?\s*:\s*(.+)$")
+
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if not stripped:
+            if current_section:
+                buckets[current_section].append("")
+            continue
+
+        inline_match = inline_pattern.match(stripped)
+        if inline_match:
+            label, value = inline_match.groups()
+            section = detect_section(label)
+            if section:
+                current_section = section
+                buckets[section].append(value.strip())
+                continue
+
+        section = detect_section(stripped)
+        if section:
+            current_section = section
+            continue
+
+        if current_section:
+            buckets[current_section].append(raw_line)
+
+    for key, content_lines in buckets.items():
+        content = "\n".join(content_lines).strip()
+        if content:
+            parsed[key] = content
+
+    return parsed
+
+
 def review_paper(profile: dict, paper_text: str) -> ReviewResult:
     system_prompt = "You are a careful academic writing reviewer."
     prompt = build_review_prompt(profile, paper_text)
     ai_text = generate_ai_text(system_prompt, prompt)
     if ai_text:
+        sections = _parse_ai_review_sections(ai_text)
+        if is_nvidia_debug_enabled():
+            present_keys = [key for key in ("strengths", "weaknesses", "suggestions", "summary") if sections.get(key)]
+            print(f"Review parse keys from AI output: {present_keys}")
         return ReviewResult(
-            strengths=ai_text,
-            weaknesses="See the generated critique above.",
-            suggestions="Use the AI output directly for the full review.",
-            summary=summarize_text(paper_text),
+            strengths=sections.get("strengths") or ai_text,
+            weaknesses=sections.get("weaknesses") or summarize_text(ai_text, 900),
+            suggestions=sections.get("suggestions") or summarize_text(ai_text, 900),
+            summary=sections.get("summary") or summarize_text(ai_text, 500),
         )
     return local_review_fallback(profile, paper_text)
 
